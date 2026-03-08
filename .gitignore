@@ -1,6 +1,5 @@
 /.venv
 /.env
-/config/settings.py
 /__pycache__
 /config/__pycache__
 /models/__pycache__

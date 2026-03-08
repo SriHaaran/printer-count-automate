@@ -19,7 +19,7 @@ def run_ingestion():
     print(f"Latest stored Created At: {latest_known_dt}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=HEADLESS)
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()
 

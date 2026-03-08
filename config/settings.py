@@ -1,39 +1,43 @@
-"""
-Global configuration settings for the Ricoh scraping engine.
-
-This module loads environment variables and provides
-central configuration values such as:
-
-- printer URL
-- login credentials
-- scraping interval
-- CSV storage location
-
-These values can be overridden using a `.env` file.
-"""
-
 import os
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+def get_env(name: str) -> str:
+    """
+    Helper function to fetch required environment variables.
+    Raises error if missing.
+    """
+    value = os.getenv(name)
+
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Environment variable '{name}' is not set in .env")
+
+    return value
 
 # Timezone used for scheduler and timestamps
-TZ = ZoneInfo(os.getenv("TZ", "Asia/Kuala_Lumpur"))
+TZ = ZoneInfo(get_env("TZ"))
 
 # Printer Web Image Monitor URL
-PRINTER_BASE_URL = os.getenv("PRINTER_BASE_URL", "http://192.168.1.44")
+PRINTER_BASE_URL = get_env("PRINTER_BASE_URL")
 
 # Printer login credentials
-LOGIN_USER = os.getenv("LOGIN_USER", "admin")
-LOGIN_PASS = os.getenv("LOGIN_PASS", "")
+LOGIN_USER = get_env("LOGIN_USER")
+LOGIN_PASS = os.getenv("LOGIN_PASS", "")  # password can be blank
 
 # Whether Playwright runs browser in headless mode
-HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
+HEADLESS = get_env("HEADLESS").lower() == "true"
 
 # Interval between scraping runs (seconds)
-POLL_SECONDS = int(os.getenv("POLL_SECONDS", "300"))
+POLL_SECONDS = int(get_env("POLL_SECONDS"))
 
 # Location of CSV storage file for scraped print history
-CSV_PATH = os.getenv("CSV_PATH", "Y:\\ricoh_print_history\\print_jobs.csv")
-ACCESS_DB_PATH = os.getenv("ACCESS_DB_PATH", "Y:\\STAFF WORKING FOLDER\\STAFF\\Mr. Sri\\Backend\\Lemurian_db V7.accdb")
+CSV_PATH = get_env("CSV_PATH")
 
-# Location of CSV storage file for scraped print history
-MAX_PAGES = int(os.getenv("MAX_PAGES", "100"))
+# MS Access database location
+ACCESS_DB_PATH = get_env("ACCESS_DB_PATH")
+
+# Maximum pagination safety limit
+MAX_PAGES = int(get_env("MAX_PAGES"))
