@@ -33,6 +33,7 @@ POLL_SECONDS = int(os.getenv("POLL_SECONDS", "300"))
 
 # Location of CSV storage file for scraped print history
 CSV_PATH = os.getenv("CSV_PATH", "Y:\\ricoh_print_history\\print_jobs.csv")
+ACCESS_DB_PATH = os.getenv("ACCESS_DB_PATH", "Y:\\STAFF WORKING FOLDER\\STAFF\\Mr. Sri\\Backend\\Lemurian_db V7.accdb")
 
 # Location of CSV storage file for scraped print history
 MAX_PAGES = int(os.getenv("MAX_PAGES", "100"))
