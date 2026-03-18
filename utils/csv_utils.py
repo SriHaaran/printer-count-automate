@@ -23,15 +23,19 @@ def ensure_csv_exists(csv_path: str) -> None:
 def parse_created_at(dt_str: str) -> Optional[datetime]:
     """
     Parse Ricoh Created At string into datetime.
-    Example: 3/7/2026 14:25:18
+
+    Ricoh printer history in this environment uses:
+        DD/MM/YYYY HH:MM:SS
+
+    Example:
+        17/03/2026 12:43:17
     """
     cleaned = " ".join((dt_str or "").split())
-    for fmt in ("%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S"):
-        try:
-            return datetime.strptime(cleaned, fmt)
-        except ValueError:
-            continue
-    return None
+
+    try:
+        return datetime.strptime(cleaned, "%d/%m/%Y %H:%M:%S")
+    except ValueError:
+        return None
 
 def build_row_fingerprint(job: PrintJob) -> str:
     """

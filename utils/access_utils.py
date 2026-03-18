@@ -63,8 +63,8 @@ def insert_new_jobs_to_access(db_path: str, jobs: List[PrintJob]) -> int:
         cursor.execute(
             """
             INSERT INTO PrinterHistoryT
-            (CreatedDate, UserName, UserId, FileName, Status, Pages, Description, RowFingerprint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (CreatedDate, UserName, UserId, FileName, Status, Pages, RowFingerprint)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.created_at,
@@ -73,7 +73,6 @@ def insert_new_jobs_to_access(db_path: str, jobs: List[PrintJob]) -> int:
                 job.file_name,
                 job.status,
                 job.pages,
-                "",  # leave description empty
                 fp,
             )
         )

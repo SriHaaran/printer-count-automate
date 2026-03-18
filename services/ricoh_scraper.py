@@ -41,6 +41,10 @@ def scrape_page(frame) -> List[PrintJob]:
             if "access restricted" in status.lower():
                 continue
 
+            # Skip processing records that cannot be accessed
+            if "processing" in status.lower():
+                continue
+
             created_at = tds.nth(5).inner_text().strip().replace("\n", " ")
             pages = tds.nth(6).inner_text().strip()
 
@@ -167,11 +171,23 @@ def goto_next_page(frame) -> bool:
     print("No next page found or page did not change.")
     return False
 
-def extract_all_pages(frame, latest_known_dt: Optional[datetime] = None, max_pages: int = 100) -> List[PrintJob]:
+def extract_all_pages(frame, max_pages: int = 100):
+    """
+    Scrape all available history pages from page 1 onward.
 
-    all_jobs: List[PrintJob] = []
-    seen_page_signatures = set()
+    Important:
+    We do NOT stop based on Created At timestamp because
+    Ricoh history ordering is not strictly sequential by time.
+
+    Stop conditions:
+    - no rows found
+    - page signature repeats
+    - no next page exists
+    - max_pages reached
+    """
+    all_jobs = []
     session_fingerprints = set()
+    seen_page_signatures = set()
 
     for page_no in range(1, max_pages + 1):
         print(f"\n=== Scraping page {page_no} ===")
@@ -187,41 +203,20 @@ def extract_all_pages(frame, latest_known_dt: Optional[datetime] = None, max_pag
             print("No jobs found on this page. Stopping.")
             break
 
-        page_new_count = 0
-        oldest_dt_on_page: Optional[datetime] = None
-        newest_dt_on_page: Optional[datetime] = None
+        page_added = 0
 
         for job in page_jobs:
-            dt = parse_created_at(job.created_at)
-            if dt is not None:
-                if oldest_dt_on_page is None or dt < oldest_dt_on_page:
-                    oldest_dt_on_page = dt
-                if newest_dt_on_page is None or dt > newest_dt_on_page:
-                    newest_dt_on_page = dt
-
             fp = build_row_fingerprint(job)
 
-            # avoid duplicates within same scraping run
+            # avoid duplicate rows within the same scraping session
             if fp in session_fingerprints:
                 continue
 
             session_fingerprints.add(fp)
-
-            # collect everything for now; final dedupe happens before CSV append
             all_jobs.append(job)
-            page_new_count += 1
+            page_added += 1
 
-        print(f"Candidate jobs collected from page {page_no}: {page_new_count}")
-        print(f"Newest datetime on page {page_no}: {newest_dt_on_page}")
-        print(f"Oldest datetime on page {page_no}: {oldest_dt_on_page}")
-
-        # Early stop rule:
-        # if the oldest row on this page is already older than or equal to the
-        # latest stored timestamp, later pages will also be older.
-        if latest_known_dt is not None and oldest_dt_on_page is not None:
-            if oldest_dt_on_page <= latest_known_dt:
-                print("Oldest row on current page is older than/equal to latest stored timestamp. Stopping pagination early.")
-                break
+        print(f"Candidate jobs collected from page {page_no}: {page_added}")
 
         if not goto_next_page(frame):
             break
