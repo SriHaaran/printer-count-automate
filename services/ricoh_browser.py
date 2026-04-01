@@ -1,5 +1,4 @@
 from playwright.sync_api import Page
-
 from config.settings import PRINTER_BASE_URL, LOGIN_USER, LOGIN_PASS
 
 def _all_contexts(page: Page):
@@ -147,3 +146,50 @@ def find_history_frame(page: Page):
         pass
 
     raise RuntimeError("History frame not found.")
+
+# Additional navigation to reach 'Counter per User' page.
+def click_home(page: Page):
+    candidates = [
+        'a:has-text("Home")',
+        'text=Home',
+        'a[href*="home"]',
+        'a[href*="Home"]',
+    ]
+
+    page.wait_for_timeout(1500)
+
+    for ctx in _all_contexts(page):
+        for sel in candidates:
+            try:
+                loc = ctx.locator(sel)
+                if loc.count() == 0:
+                    continue
+
+                for i in range(loc.count()):
+                    item = loc.nth(i)
+                    if item.is_visible():
+                        item.click(timeout=5000)
+                        page.wait_for_timeout(2500)
+                        return
+            except Exception:
+                continue
+
+    raise RuntimeError("Home button/link not found.")
+
+def goto_counter_per_user_from_home(page: Page):
+    """
+    Assumes the session is already logged in.
+    Flow:
+    Home -> Status/Information -> Counter per User
+    """
+    click_home(page)
+
+    if not _click_text_in_any_context(page, "Status/Information"):
+        raise RuntimeError("Menu 'Status/Information' not found.")
+
+    page.wait_for_timeout(1500)
+
+    if not _click_text_in_any_context(page, "Counter per User"):
+        raise RuntimeError("'Counter per User' not found.")
+
+    page.wait_for_timeout(3000)

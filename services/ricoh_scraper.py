@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional
+from typing import List, Dict
 
 from models.print_job import PrintJob
 from datetime import datetime
@@ -223,3 +223,135 @@ def extract_all_pages(frame, max_pages: int = 100):
 
     print(f"\nTotal candidate jobs scraped across all pages: {len(all_jobs)}")
     return all_jobs
+
+# Additional functions to reach 'Counter per User' page and scrape data from it.
+def find_counter_table_context(page):
+    """
+    Find the frame/page that contains the Counter per User table.
+    """
+    for frame in page.frames:
+        try:
+            body = frame.locator("body")
+            if body.count() > 0:
+                text = body.inner_text(timeout=2000)
+                if "Counter per User" in text and "Display Count" in text and "Total Prints" in text:
+                    return frame
+        except Exception:
+            continue
+
+    try:
+        body = page.locator("body")
+        if body.count() > 0:
+            text = body.inner_text(timeout=2000)
+            if "Counter per User" in text and "Display Count" in text and "Total Prints" in text:
+                return page
+    except Exception:
+        pass
+
+    raise RuntimeError("Counter per User page/frame not found.")
+
+
+def set_counter_display_20(ctx):
+    """
+    Set Display Count dropdown to 20.
+    """
+    candidates = [
+        'select',
+        'select[name*="count"]',
+        'select[name*="display"]',
+    ]
+
+    for sel in candidates:
+        try:
+            loc = ctx.locator(sel)
+            if loc.count() == 0:
+                continue
+
+            first = loc.first
+            if not first.is_visible():
+                continue
+
+            options = first.locator("option")
+            for i in range(options.count()):
+                txt = options.nth(i).inner_text().strip()
+                if txt == "20":
+                    first.select_option(label="20")
+                    ctx.wait_for_timeout(2500)
+                    return
+        except Exception:
+            continue
+
+    raise RuntimeError("Display Count dropdown with value 20 not found.")
+
+
+def find_counter_data_table(ctx):
+    """
+    Find the main counter table containing User / Name / Total Prints / Printer.
+    """
+    tables = ctx.locator("table")
+
+    for i in range(tables.count()):
+        table = tables.nth(i)
+        try:
+            txt = table.inner_text(timeout=2000)
+            if "User" in txt and "Name" in txt and "Total Prints" in txt and "Printer" in txt:
+                return table
+        except Exception:
+            continue
+
+    raise RuntimeError("Counter per User data table not found.")
+
+
+def scrape_counter_per_user(ctx) -> list[Dict]:
+    """
+    Scrape one Counter per User page only.
+    No pagination required.
+
+    Required fields:
+    - PrinterID              -> User
+    - TotalPrintsBW          -> Total Prints B&W
+    - TotalPrintsColor       -> Total Prints Color
+    - TotalPrints            -> B&W + Color
+    - PrinterBW              -> Printer Black & White
+    - TotalPrintUpdateTime   -> current datetime
+    """
+    table = find_counter_data_table(ctx)
+    rows = table.locator("tr")
+
+    results: list[Dict] = []
+    now = datetime.now()
+
+    for i in range(rows.count()):
+        row = rows.nth(i)
+        cells = row.locator("td")
+
+        # Header rows / grouping rows won't have enough td columns
+        if cells.count() < 11:
+            continue
+
+        try:
+            printer_id = cells.nth(0).inner_text().strip()
+            employee_name = cells.nth(1).inner_text().strip()
+
+            # Based on your screenshot mapping
+            total_bw = int((cells.nth(2).inner_text() or "0").replace(",", "").strip())
+            total_color = int((cells.nth(3).inner_text() or "0").replace(",", "").strip())
+            printer_bw = int((cells.nth(10).inner_text() or "0").replace(",", "").strip())
+        except Exception:
+            continue
+
+        if not printer_id or not printer_id.isdigit():
+            continue
+
+        results.append({
+            "PrinterID": printer_id,
+            "EmployeeName": employee_name,
+            "TotalPrintsBW": total_bw,
+            "TotalPrintsColor": total_color,
+            "TotalPrints": total_bw + total_color,
+            "PrinterBW": printer_bw,
+            "TotalPrintUpdateTime": now,
+        })
+
+    print(f"Counter rows parsed: {len(results)}")
+    return results
