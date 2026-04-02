@@ -1,217 +1,200 @@
-# Ricoh MPC3504 – Printer Job History Automation
+# 🖨️ Printer Count Automate
 
-## Overview
+Automated scraping and data integration system for Ricoh Web Image Monitor.
 
-This service automates extraction of **Printer Job History** from a Ricoh MPC3504 (Web Image Monitor), processes the data based on time windows, and stores structured output in daily Excel files.
+This project extracts:
+- 📄 **Printer Job History** (transaction-level data)
+- 📊 **Counter per User** (summary-level data)
 
-Key capabilities:
-
-- Login via browser automation (Playwright)
-- Supports Ricoh **Frames-based UI**
-- Handles **pagination across job history pages**
-- Extracts only records within defined time windows
-- Creates **daily Excel file**
-- Splits records into **separate sheets per UserID**
-- Leaves Description column blank (for staff input)
-- Docker-ready deployment
-- Stateful deduplication using JobID
+…and syncs them into:
+- CSV (for audit & backup)
+- Microsoft Access (for reporting & analytics)
 
 ---
 
-# Project Architecture
+## 🚀 Key Features
 
-This project follows a clean, modular service architecture.
-
-## Folder Structure Explanation
-
-## 1️⃣ app.py
-Main entry point (orchestrator only).
-
-Responsibilities:
-- Controls execution loop
-- Determines working hours vs after-hours logic
-- Computes time window
-- Calls service layer
-- Writes to Excel
-- Saves state
-- Controls polling interval
-
-It does NOT contain scraping or Excel logic directly.
-
----
-## 2️⃣ config/
-
-### settings.py
-
-Centralized configuration loaded from environment variables.
-
-Contains:
-- Printer base URL
-- Login credentials
-- Working hour definitions
-- Poll intervals
-- Time window buffer
-- Output and state directories
-- Headless mode flag
-- Timezone
-
-This keeps configuration separate from logic.
-
----
-
-## 3️⃣ models/
-
-### print_job.py
-
-Defines the data structure for a print job.
-
-```Python
-@dataclass
-class PrintJob:
-    job_id: str
-    user_id: str
-    file_name: str
-    created_at: str
-```
----
-## 4️⃣ services/
-
-Business logic layer.
-
-### ricoh_browser.py
-
-Handles:
-- Login
-- Navigation
-- Frame detection
-- Moving to Printer Job History page
-
-This isolates browser automation from scraping logic.
-
-### ricoh_scraper.py
-
-Handles:
-- Table parsing
-- Frame scraping
-- Pagination
-- Time filtering
-- JobID extraction
-- Ricoh datetime parsing
-
-Only responsible for extracting structured PrintJob objects.
-
-### scheduler.py (optional future)
-
-Reserved for:
-- Advanced scheduling logic
-- Cron-style execution
-- Retry strategies
-
-## 5️⃣ utils/
-
-Reusable helper logic.
-
-### time_utils.py
-- Working hours detection
-- Poll interval decision
-- Time window computation
-- Window buffer logic
-
-### excel_utils.py
-
-- Excel creation
-- Daily folder creation
-- Sheet per UserID
-- Description column intentionally blank
-- Safe sheet naming
-
-### state_utils.py
-
-- JSON-based state management
-- Deduplication by JobID
-- Daily state file
-
-State files stored under:
-`state/state_YYYY-MM-DD.json`
-
----
-## 6️⃣ output/
-
-Stores generated Excel files.
-
-Structure:
-```
-output/
-   2026-03-03/
-       PrinterJobHistory_2026-03-03.xlsx
-   2026-03-04/
-       PrinterJobHistory_2026-03-04.xlsx
-```
-
-Each Excel file contains:
-- Separate sheet per UserID
-- Columns:
-  - UserID
+### ✅ 1. Printer Job History Scraping
+- Multi-page scraping with pagination handling
+- Deduplication using row fingerprint
+- Captures:
+  - Job ID
+  - User Name / ID
   - File Name
-  - Description (blank)
-  - Created at
+  - Status
+  - Created At
+  - Pages
 
 ---
-## 7️⃣ state/
 
-Stores daily deduplication state.
+### ✅ 2. Counter per User Scraping
+- Extracts user-level print usage
+- No pagination required
+- Captures:
+  - Total Prints (B&W)
+  - Total Prints (Color)
+  - Total Prints (Auto-calculated)
+  - Printer B&W usage
+  - Last update timestamp
 
-Example:
-`state/state_2026-03-03.json`
-
-Used to:
-- Prevent duplicate insertion
-- Track processed JobID values
-- Maintain lightweight history
 ---
-## Execution Logic
-### Working Hours
 
-Default:
-- 08:00 to 17:00
+### ✅ 3. Microsoft Access Integration
+- Inserts new job records into `PrinterHistoryT`
+- Updates user totals in `EmployeeT`
+- Uses:
+  - `RowFingerprint` → prevent duplicate inserts
+  - `PrinterID` → match user for updates
 
-During working hours:
-- Poll every 5 minutes
-- Window = 5 minutes + buffer
-
-After working hours:
-- Poll every 30 minutes
-- Window = 30 minutes + buffer
 ---
-## Time Window Logic
 
-Instead of relying only on JobID, the system:
+### ✅ 4. ESG & Digitalisation Alignment 🌱
+- Reduces manual monitoring
+- Enables print usage tracking
+- Supports sustainability reporting:
+  - paper consumption
+  - user-level print accountability
+- Promotes digital workflow adoption
 
-1. Calculates:
+---
+
+## 🧱 Project Structure
+
+```bash
+printer-count-automate/
+├── config/
+│   └── settings.py
+│
+├── logs/
+│
+├── models/
+│   └── print_job.py
+│
+├── services/
+│   ├── ingestion_service.py      # Main workflow orchestrator
+│   ├── ricoh_browser.py          # Navigation & login handling
+│   └── ricoh_scraper.py          # Data extraction logic
+│
+├── utils/
+│   ├── access_utils.py           # MS Access integration
+│   ├── csv_utils.py              # CSV handling
+│   ├── state_utils.py
+│   └── time_utils.py
+│
+├── .env                          # Environment variables
+├── app.py                        # Entry point
+├── run_print_history.bat         # Windows scheduler runner
+├── requirements.txt
+└── README.md
 ```
-window_start = now - interval - buffer
-window_end = now
+---
+## ⚙️ Setup Instructions
+
+### 1️⃣ Install Dependencies
+```bash
+pip install -r requirements.txt
 ```
-2. Scrapes page 1
 
-3. Checks Created At timestamp
+### 2️⃣ Install Playwright
+```bash
+playwright install
+```
 
-4. If oldest record on page still within window → go to next page
+### 3️⃣ Setup ```env.``` file
 
-5. Stops when:
-- Oldest record < window_start
-- No next page available
-- Safety page limit reached
+Create a ```.env``` file in the project root:
 
-This ensures no missed records due to pagination.
+```bash
+TZ=Asia/Kuala_Lumpur
+
+PRINTER_BASE_URL=http://YourIPAddress
+LOGIN_USER= YourUsername
+LOGIN_PASS= YOurPassword
+
+HEADLESS=true
+POLL_SECONDS=300
+
+CSV_PATH=C:\YourPath\printer_history.csv
+ACCESS_DB_PATH=C:\YourPath\database.accdb
+
+MAX_PAGES=50
+```
+
+### 4️⃣ MS Access Requirements
+
+Ensure the following table structures exist.
+
+🧾 ```PrinterHistoryT```
+
+| Field | Description |
+| -------- | -------- |
+| ```CreatedDate```  | Print timestamp   |
+| ```UserName```	| User name |
+| ```UserId``` |	Printer ID |
+| ```FileName``` |	Document name |
+| ```Status```	| Print status |
+| ```Pages``` |	Page count |
+| ```RowFingerprint``` |	Deduplication key |
 
 ---
 
-## Frame Handling
+👤 ```EmployeeT```
 
-Ricoh Web Image Monitor uses HTML frames.
+| Field | Description |
+| -------- | -------- |
+| ```PrinterID``` |	User ID matching Ricoh User |
+| ```TotalPrints```	| Total prints (B&W + Color) |
+| ```TotalPrintsBW```	| Total prints B&W |
+| ```TotalPrintsColor``` |	Total prints Color |
+| ```PrinterBW``` |	Printer Black & White usage |
+| ```TotalPrintUpdateTime``` |	Last sync timestamp |
 
-The system:
-- Iterates through page.frames
-- Detects the frame containing table.reportListCommon
-- Executes scraping inside the correct frame context
+---
+
+### ▶️ Running the Project
+
+1️⃣ Run manually
+```bash
+python app.py
+```
+
+2️⃣ Run via Windows Scheduler
+
+Use the provided batch file:
+```bash
+run_print_history.bat
+```
+---
+### 🔄 Process Flow
+
+1. Login to Ricoh Web UI
+2. Navigate to Printer Job History
+3. Scrape all pages
+4. Save data to CSV and Access
+5. Click Home
+6. Navigate to Counter per User
+7. Set Display Count = 20
+8. Scrape user totals
+9. Update EmployeeT in Access
+
+---
+### 🧠 Data Logic
+
+✔ Printer Job History
+- Insert only new records
+- Prevent duplicates using RowFingerprint
+
+✔ Counter per User
+- Always overwrite the latest totals
+- Do not accumulate values across runs
+
+```TotalPrints = TotalPrintsBW + TotalPrintsColor```
+
+---
+
+### 🛠 Tech Stack
+
+- Python 3.11+
+- Playwright (browser automation)
+- Microsoft Access (ODBC)
+- CSV (backup layer)
