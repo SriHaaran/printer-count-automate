@@ -3,6 +3,7 @@ from typing import List, Dict
 
 from models.print_job import PrintJob
 from datetime import datetime
+from config.settings import TZ
 
 from utils.csv_utils import parse_created_at, build_row_fingerprint
 
@@ -319,7 +320,7 @@ def scrape_counter_per_user(ctx) -> list[Dict]:
     rows = table.locator("tr")
 
     results: list[Dict] = []
-    now = datetime.now()
+    now = datetime.now(TZ)
 
     for i in range(rows.count()):
         row = rows.nth(i)

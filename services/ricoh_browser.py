@@ -1,5 +1,5 @@
 from playwright.sync_api import Page
-from config.settings import PRINTER_BASE_URL, LOGIN_USER, LOGIN_PASS
+from config.settings import PRINTER_BASE_URL, LOGIN_USER, LOGIN_PASS, DEBUG
 
 def _all_contexts(page: Page):
     return [page] + list(page.frames)
@@ -62,16 +62,24 @@ def _find_login_context(page: Page):
 
     raise RuntimeError("Login form not found on page or frames.")
 
+
 def _click_text_in_any_context(page: Page, text_value: str) -> bool:
+    """
+    Fast and reliable partial text click across frames.
+    """
     for ctx in _all_contexts(page):
         try:
             loc = ctx.get_by_text(text_value, exact=False)
-            if loc.count() > 0 and loc.first.is_visible():
-                loc.first.click(timeout=5000)
-                page.wait_for_timeout(2000)
-                return True
+            if loc.count() > 0:
+                for i in range(loc.count()):
+                    item = loc.nth(i)
+                    if item.is_visible():
+                        item.click(timeout=5000)
+                        page.wait_for_timeout(2000)
+                        return True
         except Exception:
             continue
+
     return False
 
 def login_and_go_history(page: Page):
@@ -112,14 +120,22 @@ def login_and_go_history(page: Page):
     login_button.click()
     page.wait_for_timeout(3000)
 
-    if not _click_text_in_any_context(page, "Print Job/Stored File"):
+    # Step 1: Open Print Job menu 
+    if not _click_text_in_any_context(page, "Print Job"):
         raise RuntimeError("Menu 'Print Job/Stored File' not found.")
 
-    if not _click_text_in_any_context(page, "Printer: Print Jobs"):
-        raise RuntimeError("'Printer: Print Jobs' not found.")
+    page.wait_for_timeout(2000)
 
-    if not _click_text_in_any_context(page, "Go to [Printer Job History]"):
-        raise RuntimeError("'Go to [Printer Job History]' not found.")
+    # Step 2: Open Printer Print Jobs (flexible match)
+    if not _click_text_in_any_context(page, "Print Jobs"):
+        raise RuntimeError("'Printer Print Jobs' not found.")
+
+    page.wait_for_timeout(2000)
+
+    # Step 3: Go to Printer Job History
+    if not _click_text_in_any_context(page, "Printer Job History"):
+        if not _click_text_in_any_context(page, "Go to"):
+            raise RuntimeError("'Printer Job History' link not found.")
 
     page.wait_for_timeout(3000)
 
@@ -156,40 +172,66 @@ def click_home(page: Page):
         'a[href*="Home"]',
     ]
 
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(2000)
 
     for ctx in _all_contexts(page):
         for sel in candidates:
             try:
                 loc = ctx.locator(sel)
-                if loc.count() == 0:
-                    continue
-
-                for i in range(loc.count()):
-                    item = loc.nth(i)
-                    if item.is_visible():
-                        item.click(timeout=5000)
-                        page.wait_for_timeout(2500)
-                        return
+                if loc.count() > 0:
+                    for i in range(loc.count()):
+                        item = loc.nth(i)
+                        if item.is_visible():
+                            item.click(timeout=5000)
+                            page.wait_for_timeout(3000)
+                            return
             except Exception:
                 continue
 
-    raise RuntimeError("Home button/link not found.")
+    # fallback: click top-left logo (works in Ricoh UI)
+    try:
+        page.locator("img").first.click(timeout=3000)
+        page.wait_for_timeout(3000)
+        return
+    except Exception:
+        pass
+
+    raise RuntimeError("Home button not found.")
 
 def goto_counter_per_user_from_home(page: Page):
     """
-    Assumes the session is already logged in.
-    Flow:
-    Home -> Status/Information -> Counter per User
+    Navigate using LEFT MENU FRAME (stable method)
     """
+
     click_home(page)
-
-    if not _click_text_in_any_context(page, "Status/Information"):
-        raise RuntimeError("Menu 'Status/Information' not found.")
-
-    page.wait_for_timeout(1500)
-
-    if not _click_text_in_any_context(page, "Counter per User"):
-        raise RuntimeError("'Counter per User' not found.")
-
     page.wait_for_timeout(3000)
+
+    # Step 1: find LEFT MENU frame (very important)
+    menu_frame = None
+
+    for frame in page.frames:
+        try:
+            txt = frame.locator("body").inner_text(timeout=2000)
+
+            if "Status/Information" in txt and "Print Job" in txt:
+                menu_frame = frame
+                break
+        except Exception:
+            continue
+
+    if menu_frame is None:
+        raise RuntimeError("Left menu frame not found.")
+
+    # Step 2: click Status/Information inside correct frame
+    try:
+        menu_frame.get_by_text("Status/Information", exact=False).first.click()
+        page.wait_for_timeout(2000)
+    except Exception:
+        raise RuntimeError("Failed to click 'Status/Information'")
+
+    # Step 3: click Counter per User
+    try:
+        menu_frame.get_by_text("Counter per User", exact=False).first.click()
+        page.wait_for_timeout(3000)
+    except Exception:
+        raise RuntimeError("Failed to click 'Counter per User'")

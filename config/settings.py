@@ -41,3 +41,6 @@ ACCESS_DB_PATH = get_env("ACCESS_DB_PATH")
 
 # Maximum pagination safety limit
 MAX_PAGES = int(get_env("MAX_PAGES"))
+
+# Debug mode for verbose logging and skipping certain waits
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
